@@ -2,7 +2,7 @@ import React from "react";
 import "./canvas.css";
 import { ioGetDouble, ioSetDouble, drawCanvas } from "./wwasm.js";
 
-export default function Canvas() {
+export default function WCanvas() {
   let w = 1000;
   let h = 400;
 
