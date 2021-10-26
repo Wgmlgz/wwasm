@@ -15,14 +15,171 @@
 #include "em_header.hpp"
 
 namespace wwasm {
-template <typename T>
-struct Line {
-  std::complex<T> a, b;
+
+namespace Dracula {
+  auto red = 0xff5555;
+  auto black = 0x282a36;
+  auto gray = 0x44475a;
+  auto green = 0x50fa7b;
+  auto purple = 0xbd93f9;
+  auto pink = 0xff79c6;
+}
+
+struct Col {
+  uint8_t r = 0, g = 0, b = 0, a = 255;
+  Col(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 255) : r(r_), g(g_), b(b_), a(a_) {};
+  Col(int hex) {
+    r = ((hex >> 16) & 0xFF); 
+    g = ((hex >> 8) & 0xFF);
+    b = ((hex) & 0xFF);
+  }
 };
 
 template <typename T>
-class CanvasT {
- public:
+struct CanvasT {
+  typedef std::complex<T> Pt;
+  typedef CanvasT<T>& CTR;
+
+  struct Entity {
+    virtual void render(CTR canvas) = 0;
+    virtual ~Entity() {};
+  };
+
+  struct Line : public Entity {
+    Line(Pt a, Pt b, Col col = Dracula::red) : a_(a), b_(b), col_(col) {}
+    virtual void render(CTR canvas) override {
+      drawLine(canvas, a_.real(), a_.imag(), b_.real(), b_.imag(), col_.r, col_.g, col_.b);
+    }
+    Pt a_, b_;
+    Col col_;
+    
+   private:
+    void drawLine(CTR canvas, T x0, T y0, T x1, T y1, uint8_t r, uint8_t g, uint8_t b, T size = 0.5, size_t iterations = 3) {
+      x0 -= canvas.x_;
+      x1 -= canvas.x_;
+      y0 -= canvas.y_;
+      y1 -= canvas.y_;
+
+      x0 *= canvas.zoom_;
+      x1 *= canvas.zoom_;
+      y0 *= canvas.zoom_;
+      y1 *= canvas.zoom_;
+
+      x0 += canvas.w_ / 2;
+      x1 += canvas.w_ / 2;
+      y0 += canvas.h_ / 2;
+      y1 += canvas.h_ / 2;
+
+      for (float i = -size; i < size; i += 2 * size / iterations) {
+        for (float j = -size; j < size; j += 2 * size / iterations) {
+          putLine(canvas, x0 + i, y0 + j, x1 + i, y1 + j, r, g, b);
+          putLine(canvas, x0, y0, x1, y1, r, g, b);
+        }
+      }
+    }
+
+    /* https://rosettacode.org/wiki/Xiaolin_Wu%27s_line_algorithm#C.2B.2B */
+    void putLine(CTR canvas, T x0, T y0, T x1, T y1, uint8_t r, uint8_t g, uint8_t b) {
+      auto ipart = [](float x) -> int { return int(std::floor(x)); };
+      auto round = [](float x) -> float { return std::round(x); };
+      auto fpart = [](float x) -> float { return x - std::floor(x); };
+      auto rfpart = [=](float x) -> float { return 1 - fpart(x); };
+
+      const bool steep = abs(y1 - y0) > abs(x1 - x0);
+      if (steep) {
+        std::swap(x0, y0);
+        std::swap(x1, y1);
+      }
+      if (x0 > x1) {
+        std::swap(x0, x1);
+        std::swap(y0, y1);
+      }
+
+      const float dx = x1 - x0;
+      const float dy = y1 - y0;
+      const float gradient = (dx == 0) ? 1 : dy / dx;
+
+      int xpx11;
+      float intery;
+      {
+        const float xend = round(x0);
+        const float yend = y0 + gradient * (xend - x0);
+        const float xgap = rfpart(x0 + 0.5);
+        xpx11 = int(xend);
+        const int ypx11 = ipart(yend);
+        if (steep) {
+          canvas.setPixel(ypx11, xpx11, rfpart(yend) * xgap, r, g, b);
+          canvas.setPixel(ypx11 + 1, xpx11, fpart(yend) * xgap, r, g, b);
+        } else {
+          canvas.setPixel(xpx11, ypx11, rfpart(yend) * xgap, r, g, b);
+          canvas.setPixel(xpx11, ypx11 + 1, fpart(yend) * xgap, r, g, b);
+        }
+        intery = yend + gradient;
+      }
+
+      int xpx12;
+      {
+        const float xend = round(x1);
+        const float yend = y1 + gradient * (xend - x1);
+        const float xgap = rfpart(x1 + 0.5);
+        xpx12 = int(xend);
+        const int ypx12 = ipart(yend);
+        if (steep) {
+          canvas.setPixel(ypx12, xpx12, rfpart(yend) * xgap, r, g, b);
+          canvas.setPixel(ypx12 + 1, xpx12, fpart(yend) * xgap, r, g, b);
+        } else {
+          canvas.setPixel(xpx12, ypx12, rfpart(yend) * xgap);
+          canvas.setPixel(xpx12, ypx12 + 1, fpart(yend) * xgap, r, g, b);
+        }
+      }
+
+      if (steep) {
+        for (int x = xpx11 + 1; x < xpx12; x++) {
+          canvas.setPixel(ipart(intery), x, rfpart(intery), r, g, b);
+          canvas.setPixel(ipart(intery) + 1, x, fpart(intery), r, g, b);
+          intery += gradient;
+        }
+      } else {
+        for (int x = xpx11 + 1; x < xpx12; x++) {
+          canvas.setPixel(x, ipart(intery), rfpart(intery), r, g, b);
+          canvas.setPixel(x, ipart(intery) + 1, fpart(intery), r, g, b);
+          intery += gradient;
+        }
+      }
+    }
+
+  };
+
+  struct Ngon : public Entity {
+    Ngon(Pt origin, T size, int n, Col col) : origin_(origin), size_(size), n_(n), col_(col) {
+      Pt cur{0, size_}, last{0, size_};
+      auto shift = std::polar<T>(1, 3.14159265358979323846 * 2 / n_);
+      cur *= shift;
+
+      for (int i = 0; i < n_; ++i) {
+        Line line(last + origin, cur + origin, col_);
+        lines_.push_back(line);
+        cur *= shift;
+        last *= shift;
+      }
+    }
+    virtual void render(CTR canvas) override {
+      for (auto& i : lines_) i.render(canvas);
+    }
+    std::vector<Line> lines_;
+    Pt origin_;
+    T size_;
+    int n_;
+    Col col_;
+  };
+
+  // struct Rect : Entity {
+  //   Line(Pt a, Pt b, Col col = Dracula::red) : a_(a), b_(b), col_(col) {}
+  //   virtual void render(CTR canvas) override {
+  //     drawLine(canvas, a_.real(), a_.imag(), b_.real(), b_.imag(), col_.r, col_.g, col_.b);
+  //   }
+  // }
+
   CanvasT(size_t w, size_t h) {
     /* 4k max  */
     data_ = new uint8_t[33177600 + 1024];
@@ -41,29 +198,6 @@ class CanvasT {
       data_[i] = 255 - data_[i];
       data_[i + 1] = 255 - data_[i + 1];
       data_[i + 2] = 255 - data_[i + 2];
-    }
-  }
-
-  void drawLine(const Line<T>& line, uint8_t r, uint8_t g, uint8_t b) {
-    drawLine(line.a.real(), line.a.imag(), line.b.real(), line.b.imag(), r, g, b);
-  }
-
-  void drawRect(T x, T y, T size, uint8_t r, uint8_t g, uint8_t b) {
-    drawLine(x - size, y + size, x + size, y + size, r, g, b);
-    drawLine(x - size, y - size, x + size, y - size, r, g, b);
-    drawLine(x + size, y - size, x + size, y + size, r, g, b);
-    drawLine(x - size, y - size, x - size, y + size, r, g, b);
-  }
-
-  void drawNgon(T x, T y, T size, int n, uint8_t r, uint8_t g, uint8_t b) {
-    std::complex<T> cur{0, size}, last{0, size}, origin{x, y};
-    auto shift = std::polar<T>(1, 3.14159265358979323846 * 2 / n);
-    cur *= shift;
-
-    for (int i = 0; i < n; ++i) {
-      drawLine({last + origin, cur + origin}, r, g, b);
-      cur *= shift;
-      last *= shift;
     }
   }
 
@@ -100,9 +234,23 @@ class CanvasT {
     pixel(x, y)[3] = a;
   }
 
+
+
+  void pushEntity(int z, Entity* entity) {
+    entities_[z] = std::shared_ptr<Entity>(entity);
+  }
+  void pushEntity(Entity* entity) {
+    pushEntity(entities_.size() ? entities_.rbegin()->first + 1 : 0, entity);
+  }
   uint8_t* data() { return data_; }
 
-  
+  uint8_t* render() {
+    for (auto [z, entity] : entities_) {
+      entity->render(*this);
+    }
+    return data();
+  }
+
   T getX() { return x_; }
   T getY() { return y_; }
   size_t getW() { return w_; }
@@ -114,7 +262,6 @@ class CanvasT {
   
   ~CanvasT() { free(data_); }
 
- private:
   void addPixel(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b,
                 uint8_t a) {
     if (x >= w_) return;
@@ -130,110 +277,17 @@ class CanvasT {
     addPixel(x, y, r * brightness, g * brightness, b * brightness, 255);
   }
 
-  void drawLine(T x0, T y0, T x1, T y1, uint8_t r, uint8_t g, uint8_t b, T size = 0.5, size_t iterations = 3) {
-    x0 -= x_;
-    x1 -= x_;
-    y0 -= y_;
-    y1 -= y_;
-
-    x0 *= zoom_;
-    x1 *= zoom_;
-    y0 *= zoom_;
-    y1 *= zoom_;
-
-    x0 += w_ / 2;
-    x1 += w_ / 2;
-    y0 += h_ / 2;
-    y1 += h_ / 2;
-
-    for (float i = -size; i < size; i += 2 * size / iterations) {
-      for (float j = -size; j < size; j += 2 * size / iterations) {
-        putLine(x0 + i, y0 + j, x1 + i, y1 + j, r, g, b);
-        putLine(x0, y0, x1, y1, r, g, b);
-      }
-    }
-  }
-
-  // https://rosettacode.org/wiki/Xiaolin_Wu%27s_line_algorithm#C.2B.2B
-  void putLine(T x0, T y0, T x1, T y1, uint8_t r, uint8_t g, uint8_t b) {
-    auto ipart = [](float x) -> int { return int(std::floor(x)); };
-    auto round = [](float x) -> float { return std::round(x); };
-    auto fpart = [](float x) -> float { return x - std::floor(x); };
-    auto rfpart = [=](float x) -> float { return 1 - fpart(x); };
-
-    const bool steep = abs(y1 - y0) > abs(x1 - x0);
-    if (steep) {
-      std::swap(x0, y0);
-      std::swap(x1, y1);
-    }
-    if (x0 > x1) {
-      std::swap(x0, x1);
-      std::swap(y0, y1);
-    }
-
-    const float dx = x1 - x0;
-    const float dy = y1 - y0;
-    const float gradient = (dx == 0) ? 1 : dy / dx;
-
-    int xpx11;
-    float intery;
-    {
-      const float xend = round(x0);
-      const float yend = y0 + gradient * (xend - x0);
-      const float xgap = rfpart(x0 + 0.5);
-      xpx11 = int(xend);
-      const int ypx11 = ipart(yend);
-      if (steep) {
-        setPixel(ypx11, xpx11, rfpart(yend) * xgap, r, g, b);
-        setPixel(ypx11 + 1, xpx11, fpart(yend) * xgap, r, g, b);
-      } else {
-        setPixel(xpx11, ypx11, rfpart(yend) * xgap, r, g, b);
-        setPixel(xpx11, ypx11 + 1, fpart(yend) * xgap, r, g, b);
-      }
-      intery = yend + gradient;
-    }
-
-    int xpx12;
-    {
-      const float xend = round(x1);
-      const float yend = y1 + gradient * (xend - x1);
-      const float xgap = rfpart(x1 + 0.5);
-      xpx12 = int(xend);
-      const int ypx12 = ipart(yend);
-      if (steep) {
-        setPixel(ypx12, xpx12, rfpart(yend) * xgap, r, g, b);
-        setPixel(ypx12 + 1, xpx12, fpart(yend) * xgap, r, g, b);
-      } else {
-        setPixel(xpx12, ypx12, rfpart(yend) * xgap);
-        setPixel(xpx12, ypx12 + 1, fpart(yend) * xgap, r, g, b);
-      }
-    }
-
-    if (steep) {
-      for (int x = xpx11 + 1; x < xpx12; x++) {
-        setPixel(ipart(intery), x, rfpart(intery), r, g, b);
-        setPixel(ipart(intery) + 1, x, fpart(intery), r, g, b);
-        intery += gradient;
-      }
-    } else {
-      for (int x = xpx11 + 1; x < xpx12; x++) {
-        setPixel(x, ipart(intery), rfpart(intery), r, g, b);
-        setPixel(x, ipart(intery) + 1, fpart(intery), r, g, b);
-        intery += gradient;
-      }
-    }
-  }
-
   size_t w_, h_;
   T x_ = 0, y_ = 0, zoom_ = 10;
   uint8_t* data_;
   std::mt19937 rng;
+  std::map<int, std::shared_ptr<Entity>> entities_;
 };
 
 using Canvas = CanvasT<float>; 
 
 std::map<int, Canvas> canvas_map{{0, Canvas(500, 500)}};
-
+bool init = true;
 extern "C" {
   EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(int id, int w, int h) {
     auto& canvas = canvas_map.at(id);
@@ -245,9 +299,16 @@ extern "C" {
     canvas.setZoom(zoom);
     canvas.setX(ioGetDouble(1));
     canvas.setY(ioGetDouble(2));
-    canvas.drawNgon(0, 0, 50, 5, 255, 85, 85);
+    
+    if (init) {
+      init = false;
+      canvas.pushEntity(new Canvas::Ngon({0, 0}, 50, 5, Dracula::green));
+      canvas.pushEntity(new Canvas::Ngon({100, 0}, 50, 5, Dracula::green));
 
-    return canvas.data();
+      canvas.pushEntity(new Canvas::Line({0, 0}, {100, 100}, Dracula::pink));
+    }
+    
+    return canvas.render();
   }
 }
 }  // namespace wwasm
