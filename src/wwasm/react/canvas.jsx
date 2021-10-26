@@ -49,13 +49,14 @@ export default function WCanvas() {
     }
   }
 
-  const interval = setInterval(() => {
+  setInterval(() => {
     w = window.innerWidth;
     h = window.innerHeight;
     document.getElementById(canvas_id).width = w;
     document.getElementById(canvas_id).height = h;
     drawCanvas(canvas_id, canvas_cpp_id, w, h);
   }, 16);
+
   return (
     <canvas
       id={canvas_id}
