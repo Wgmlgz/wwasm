@@ -5,7 +5,7 @@
 ## Features:
 
 - **IO**:
-  Using `io[Get/Set][double/int]` methods read/write numbers at both sides.
+  Using `io[Get/Set][double/int]` methods read/write numbers at both sides. Strings are used as ids.
 
 - **WCanvas**:
   create image stream at `c++` side using `wasm::Canvas` class and then render it to react `<WCanvas/>` component.
@@ -13,12 +13,12 @@
   Canvas features:
 
   - Store entities
-  - Ddraw lines
+  - Draw lines
   - Draw n-gons
   - Draw preloaded `.bmp` images
   - Zoom & drag with mouse
-  - Auto resizing to match window size
-  - Multiple instances
+  - Auto resizing to match parent element size
+  - Multiple instances (with unique ids)
 
 # Converting images
 
