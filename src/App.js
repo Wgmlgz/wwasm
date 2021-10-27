@@ -1,13 +1,17 @@
 import React from "react";
-import "./App.css";
-
 import WCanvas from "./wwasm/react/canvas.jsx";
 
 class App extends React.Component {
   render() {
     return (
-      <div className="App">
-        <WCanvas />
+      <div className="app">
+        <div className="cavnas">
+          <WCanvas canvas_id="aboba" />
+        </div>
+        <p className="text"> Wow 2 instances!!! ⬟ 🐸 ▲ </p>
+        <div className="cavnas">
+          <WCanvas canvas_id="main_canvas" />
+        </div>
       </div>
     );
   }

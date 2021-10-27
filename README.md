@@ -9,7 +9,6 @@
 
 - **WCanvas**:
   create image stream at `c++` side using `wasm::Canvas` class and then render it to react `<WCanvas/>` component.
-  (for now there can be only 1 instance of this canvas per app).
 
   Canvas features:
 
@@ -19,6 +18,7 @@
   - Draw preloaded `.bmp` images
   - Zoom & drag with mouse
   - Auto resizing to match window size
+  - Multiple instances
 
 # Converting images
 

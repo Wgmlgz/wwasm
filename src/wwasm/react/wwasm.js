@@ -10,14 +10,14 @@ export let getCanvasData = () => 0;
 export let readUint8Array = () => null;
 
 WWasmModule().then((Module) => {
-  ioSetInt = Module.cwrap("ioSetInt", "number", ["number", "number"]);
-  ioGetInt = Module.cwrap("ioGetInt", "number", ["number"]);
+  ioSetInt = Module.cwrap("ioSetInt", "number", ["string", "number"]);
+  ioGetInt = Module.cwrap("ioGetInt", "number", ["string"]);
 
-  ioSetDouble = Module.cwrap("ioSetDouble", "number", ["number", "number"]);
-  ioGetDouble = Module.cwrap("ioGetDouble", "number", ["number"]);
+  ioSetDouble = Module.cwrap("ioSetDouble", "number", ["string", "number"]);
+  ioGetDouble = Module.cwrap("ioGetDouble", "number", ["string"]);
 
   getCanvasData = Module.cwrap("getCanvasData", "number", [
-    "number",
+    "string",
     "number",
     "number",
   ]);
@@ -37,8 +37,8 @@ function writeImageDataToCanvas(canvas, data, width, height) {
   context.putImageData(imageData, 0, 0);
 }
 
-export function drawCanvas(canvas_id, id, w, h) {
-  let ptr = getCanvasData(id, w, h);
+export function drawCanvas(canvas_id, w, h) {
+  let ptr = getCanvasData(canvas_id, w, h);
   if (!ptr) return;
   writeImageDataToCanvas(
     document.getElementById(canvas_id),

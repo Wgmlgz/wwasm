@@ -20,6 +20,7 @@
 
 #include "./images/frog.hpp"
 
+using namespace std::string_literals;
 namespace wwasm {
 
 namespace Dracula {
@@ -217,32 +218,20 @@ struct CanvasT {
     Pt origin_;
     
     Img(Pt origin, unsigned char ptr[], int length) : origin_(origin) {
-      if (ptr) {
-        // file.seekg(0,std::ios::end);
-        // file.seekg(0,std::ios::beg);
+      buffer = ptr;
 
-        buffer = ptr;
-        // file.read(&buffer[0],length);
-
-        file_header = (BITMAPFILEHEADER*)(buffer);
-        info_header = (BITMAPINFOHEADER*)(buffer + sizeof(BITMAPFILEHEADER));
-        std::cout << "good read :)" << std::endl;
-        std::cout << length << std::endl;
-
-      } else {
-        file_header = nullptr;
-        info_header = nullptr;
-        std::cout << "error while reading file :(" << std::endl;
-      }
+      file_header = (BITMAPFILEHEADER*)(buffer);
+      info_header = (BITMAPINFOHEADER*)(buffer + sizeof(BITMAPFILEHEADER));
     }
 
     virtual void render(CTR canvas) override {
-
       if (!file_header) return;
+
       int w = info_header->biWidth;
       int h = info_header->biHeight;
 
       int count = 0;
+
       T x0 = 0 + origin_.real();
       T y0 = 0 + origin_.imag();
       T x1 = w + origin_.real();
@@ -275,13 +264,11 @@ struct CanvasT {
       T y = 0;
       T offset = 1.0 / canvas.zoom_;
 
-      std::cout << offset << std::endl;
-
       x = xs * offset;
       for (int i = x0; i < x1; ++i) {
         y = ys * offset;
         for (int j = y0; j < y1; ++j) {
-          int count = ((h - int(y) - 1) * w + int(x) + 1) * 3;
+          int count = ((h - int(y) - 1) * w + (w - int(x) - 1) + 1) * 3;
           y += offset;    
           if (y > h or x > w) continue;
           unsigned char r = buffer[file_header->bfSize - count];
@@ -417,23 +404,28 @@ struct CanvasT {
 
 using Canvas = CanvasT<float>; 
 
-std::map<int, std::shared_ptr<Canvas>> canvas_map{{0, std::shared_ptr<Canvas>(new Canvas(500, 500))}};
-bool init = true;
+std::map<std::string, std::shared_ptr<Canvas>> canvas_map{
+  {"main_canvas", std::shared_ptr<Canvas>(new Canvas(500, 500))},
+  {"aboba", std::shared_ptr<Canvas>(new Canvas(500, 500))}
+};
+
+std::map<std::string, bool> init;
 
 extern "C" {
-  EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(int id, int w, int h) {
+  EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(char* ptr, int w, int h) {
+    std::string id(ptr);
     auto& canvas = *canvas_map.at(id);
 
-    auto zoom = ioGetDouble(3);
+    auto zoom = ioGetDouble(id + "_zoom");
     if (zoom == 0) zoom = 1;
 
     canvas.reset(w, h);
     canvas.setZoom(zoom);
-    canvas.setX(ioGetDouble(1));
-    canvas.setY(ioGetDouble(2));
+    canvas.setX(ioGetDouble(id + "_x"));
+    canvas.setY(ioGetDouble(id + "_y"));
     
-    if (init) {
-      init = false;
+    if (!init[id]) {
+      init[id] = true;
       canvas.pushEntity(new Canvas::Img({0, 0}, frog_bmp, frog_bmp_len));
 
       canvas.pushEntity(new Canvas::Ngon({-100, 0}, 50, 5, Dracula::green));

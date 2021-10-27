@@ -2,12 +2,8 @@ import React from "react";
 import "./canvas.css";
 import { ioGetDouble, ioSetDouble, drawCanvas } from "./wwasm.js";
 
-export default function WCanvas() {
-  let w = 1000;
-  let h = 400;
-
-  let canvas_cpp_id = 0;
-  let canvas_id = "main_canvas";
+export default function WCanvas(props) {
+  let canvas_id = props.canvas_id;
 
   let zoom = 1;
 
@@ -22,7 +18,7 @@ export default function WCanvas() {
   function wheel(event) {
     zoom *= 1 + event.deltaY * -0.001 * 1.5;
     zoom = Math.min(Math.max(0.1, zoom), 100);
-    ioSetDouble(3, zoom);
+    ioSetDouble(canvas_id + "_zoom", zoom);
   }
 
   function btnDown(e) {
@@ -33,8 +29,8 @@ export default function WCanvas() {
 
   function btnUp(e) {
     is_down = false;
-    offset_x = ioGetDouble(1);
-    offset_y = ioGetDouble(2);
+    offset_x = ioGetDouble(canvas_id + "_x");
+    offset_y = ioGetDouble(canvas_id + "_y");
   }
 
   function dragCanvas(e) {
@@ -44,26 +40,30 @@ export default function WCanvas() {
     if (is_down) {
       x = (x - down_x) * (1 / zoom) + offset_x;
       y = (y - down_y) * (1 / zoom) + offset_y;
-      ioSetDouble(1, x);
-      ioSetDouble(2, y);
+      ioSetDouble(canvas_id + "_x", x);
+      ioSetDouble(canvas_id + "_y", y);
     }
   }
 
   setInterval(() => {
-    w = window.innerWidth;
-    h = window.innerHeight;
-    document.getElementById(canvas_id).width = w;
-    document.getElementById(canvas_id).height = h;
-    drawCanvas(canvas_id, canvas_cpp_id, w, h);
-  }, 16);
+    let canvas_div = document.getElementById(canvas_id + "_div");
+    let canvas = document.getElementById(canvas_id);
+    let w = canvas_div.parentElement.clientWidth;
+    let h = canvas_div.parentElement.clientHeight;
+    canvas.width = w;
+    canvas.height = h;
+    drawCanvas(canvas_id, w, h);
+  }, 8);
 
   return (
-    <canvas
-      id={canvas_id}
-      onMouseDown={btnDown}
-      onMouseUp={btnUp}
-      onMouseMove={dragCanvas}
-      onWheel={wheel}
-    ></canvas>
+    <div id={canvas_id + "_div"}>
+      <canvas
+        id={canvas_id}
+        onMouseDown={btnDown}
+        onMouseUp={btnUp}
+        onMouseMove={dragCanvas}
+        onWheel={wheel}
+      ></canvas>
+    </div>
   );
 }
