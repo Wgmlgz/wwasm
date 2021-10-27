@@ -6,10 +6,6 @@ class App extends React.Component {
     return (
       <div className="app">
         <div className="cavnas">
-          <WCanvas canvas_id="aboba" />
-        </div>
-        <p className="text"> Wow 2 instances!!! ⬟ 🐸 ▲ </p>
-        <div className="cavnas">
           <WCanvas canvas_id="main_canvas" />
         </div>
       </div>

@@ -19,6 +19,7 @@
   - Zoom & drag with mouse
   - Auto resizing to match parent element size
   - Multiple instances (with unique ids)
+  - Animations (demo)
 
 # Converting images
 
@@ -29,6 +30,7 @@ The easiest way to do this is to use this command (linux or wsl).
 
 # Demo:
 
+![](./screenshot.gif)
 ![](./screenshot.png)
 
 ## TODO:

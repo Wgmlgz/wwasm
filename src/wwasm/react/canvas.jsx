@@ -53,7 +53,7 @@ export default function WCanvas(props) {
     canvas.width = w;
     canvas.height = h;
     drawCanvas(canvas_id, w, h);
-  }, 8);
+  }, 16);
 
   return (
     <div id={canvas_id + "_div"}>
