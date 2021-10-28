@@ -1,4 +1,4 @@
-# WWASM liblary
+# wwasm liblary
 
 `WWASM` (Wgmlgz wasm) - is a `c++` & `reactjs` liblary for connecting `c++` backend and `reactjs` frontend.
 
