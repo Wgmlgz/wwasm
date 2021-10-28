@@ -14,7 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cmath>
-
+#include <memory>
 #include "em_header.hpp"
 #include "io.hpp"
 #include "animations.hpp"
@@ -23,22 +23,40 @@
 using namespace std::string_literals;
 namespace wwasm {
 
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
 namespace Dracula {
-  auto red = 0xff5555;
-  auto black = 0x282a36;
-  auto gray = 0x44475a;
-  auto green = 0x50fa7b;
-  auto purple = 0xbd93f9;
-  auto pink = 0xff79c6;
+  auto red = 0xff5555ff;
+  auto black = 0x282a36ff;
+  auto gray = 0x44475aff;
+  auto green = 0x50fa7bff;
+  auto purple = 0xbd93f9ff;
+  auto pink = 0xff79c6ff;
 }
 
 struct Col {
   uint8_t r = 0, g = 0, b = 0, a = 255;
   Col(uint8_t r_, uint8_t g_, uint8_t b_, uint8_t a_ = 255) : r(r_), g(g_), b(b_), a(a_) {};
   Col(int hex) {
-    r = ((hex >> 16) & 0xFF); 
-    g = ((hex >> 8) & 0xFF);
-    b = ((hex) & 0xFF);
+    r = ((hex >> 24) & 0xff);
+    g = ((hex >> 16) & 0xff);
+    b = ((hex >> 8) & 0xff);
+    a = ((hex)&0xff);
+  }
+
+  /**
+   * rgba
+   * abgr 
+   */
+  static u32 make(u32 col) {
+    return (col & 0xff000000) >> 24 |
+           (col & 0x00ff0000) >> 8  |
+           (col & 0x0000ff00) << 8  |
+           (col & 0x000000ff) << 24;
+
   }
 };
 
@@ -55,7 +73,7 @@ struct Canvas {
 
   Canvas(size_t w, size_t h) {
     /* 4k max  */
-    data_ = new uint8_t[33'177'600 + 1024];
+    data_ = new u8[33'177'600 + 1024];
     data_ += 1024;
     reset(w, h);
   }
@@ -63,7 +81,7 @@ struct Canvas {
   void reset(int w, int h) {
     h_ = h;
     w_ = w;
-    fill(68, 71, 90, 255);
+    fill(Dracula::gray);
   }
 
   void invert() {
@@ -71,6 +89,17 @@ struct Canvas {
       data_[i] = 255 - data_[i];
       data_[i + 1] = 255 - data_[i + 1];
       data_[i + 2] = 255 - data_[i + 2];
+    }
+  }
+
+  void fill(uint32_t col) {
+    col = Col::make(col);
+    auto ptr = data_;
+    for (int i = 0; i < w_; ++i) {
+      for (int j = 0; j < h_; ++j) {
+        *(uint32_t*)ptr = col;
+        ptr += 4;
+      }
     }
   }
 
@@ -97,7 +126,6 @@ struct Canvas {
   }
 
   uint8_t* pixel(size_t x, size_t y) {
-
     return data_ + (h_ - y - 1) * w_ * 4 + x * 4;
   }
 

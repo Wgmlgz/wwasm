@@ -233,16 +233,25 @@ struct Img : public Canvas::Entity {
     for (int i = x0; i < x1; ++i) {
       y = ys * offset;
       for (int j = y0; j < y1; ++j) {
-        int count = ((h - int(y) - 1) * w + (w - int(x) - 1) + 1) * 3;
+        int count = ((h - int(y) - 1) * w + (w - int(x) + 1)) * 3 + 2;
         y += offset;    
         if (y > h or x > w) continue;
-        unsigned char r = buffer[file_header->bfSize - count];
-        ++count;
-        unsigned char g = buffer[file_header->bfSize - count];
-        ++count;
-        unsigned char b = buffer[file_header->bfSize - count];
 
-        canvas.setXYRGBA(i, j, r, g, b, 255);
+        // unsigned char b = buffer[file_header->bfSize - count];
+        // ++count;
+        // unsigned char g = buffer[file_header->bfSize - count];
+        // ++count;
+        // unsigned char r = buffer[file_header->bfSize - count];
+        uint32_t col = *(uint32_t*)(buffer + (file_header->bfSize - count));
+        if ((col & 0xff) < 0xf and (col & 0xff00) < 0x0f00 and
+            (col & 0xff0000) < 0x0f0000)
+          continue;
+        col <<= 8;
+        col |= 0xff;
+        col = Col::make(col);
+        // if (rand() % 1000 == 0) std::cout << "|" << std::hex << col << "|" << std::endl;
+        *(uint32_t*)canvas.pixel(i, j) = col;
+        // canvas.setXYRGBA(i, j, r, g, b, 255);
       }
       x += offset;
     }

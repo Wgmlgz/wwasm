@@ -36,7 +36,10 @@ frm operator|(const frm& lhs, const frm& rhs) {
   return res;
 }
 
-float lerp(float a, float b, float f) { return (a * (1.0 - f)) + (b * f); }
+float lerp(float a, float b, float f) {
+  // f = (3.0 * f * f) - (2.0 * f * f * f);
+  return (a * (1.0 - f)) + (b * f);
+}
 
 frm interp(const frm& lhs, const frm& rhs, float t) {
   auto check = [](auto const& lhs, auto const& rhs) {
