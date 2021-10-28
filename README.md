@@ -38,9 +38,9 @@
       <WCanvas canvas_id="id_for_your_canvas" render="js|cpp(but js faster)" />
     </div>
     ``` 
-  WCanvas will automacly scale to match parent component size.
+  `WCanvas` will automacly scale to match parent component size.
 - ## `C++`
-  wwasm provides 2 methods: init & update. To use then you can use this code:
+  `wwasm` provides 2 methods: `init` & `update`. To use then you can use this code:
   ```cpp
   #include "wwasm.hpp"
 
