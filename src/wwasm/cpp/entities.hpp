@@ -2,14 +2,48 @@
 #include "canvas.hpp"
 
 namespace wwasm {
+/** <format> is'not supported in gcc :(
+ *  https://stackoverflow.com/questions/2342162/stdstring-formatting-like-sprintf
+ */
+template <typename... Args>
+std::string string_format(const std::string& format, Args... args) {
+  int size_s = std::snprintf(nullptr, 0, format.c_str(), args...) +
+               1;  // Extra space for '\0'
+  if (size_s <= 0) {
+    throw std::runtime_error("Error during formatting.");
+  }
+  auto size = static_cast<size_t>(size_s);
+  auto buf = std::make_unique<char[]>(size);
+  std::snprintf(buf.get(), size, format.c_str(), args...);
+  return std::string(buf.get(),
+                     buf.get() + size - 1);  // We don't want the '\0' inside
+}
+
 struct Line : public Canvas::Entity {
   using Pt = typename Canvas::Pt;
   using CTR = typename Canvas::CTR;
 
   Line(Pt a, Pt b, Col col = Dracula::red) : a_(a), b_(b), col_(col) {}
+
+  virtual void applyFrm(const frm& f) override {
+    // origin_.real(f["pos_x"]);
+    // origin_.imag(f["pos_y"]);
+  }
+
   virtual void render(CTR canvas) override {
-    drawLine(canvas, a_.real(), a_.imag(), b_.real(), b_.imag(), col_.r, col_.g,
+    auto a = canvas.transform(a_);
+    auto b = canvas.transform(b_);
+    drawLine(canvas, a.real(), a.imag(), b.real(), b.imag(), col_.r, col_.g,
              col_.b);
+  }
+
+  virtual std::string renderJSON(CTR canvas) override {
+    auto a = canvas.transform(a_);
+    auto b = canvas.transform(b_);
+    return string_format(
+        R"({"type":"line","ax":%f,"ay":%f,"bx":%f,"by":%f,"col":"%s"})",
+        a.real(), a.imag(), b.real(), b.imag(), col_.toHexStr().c_str()
+    );
   }
 
   Pt a_, b_;
@@ -18,21 +52,6 @@ struct Line : public Canvas::Entity {
  private:
   void drawLine(CTR canvas, float x0, float y0, float x1, float y1, uint8_t r, uint8_t g,
                 uint8_t b, float size = 0.5, size_t iterations = 3) {
-    x0 -= canvas.x_;
-    x1 -= canvas.x_;
-    y0 -= canvas.y_;
-    y1 -= canvas.y_;
-
-    x0 *= canvas.zoom_;
-    x1 *= canvas.zoom_;
-    y0 *= canvas.zoom_;
-    y1 *= canvas.zoom_;
-
-    x0 += canvas.w_ / 2;
-    x1 += canvas.w_ / 2;
-    y0 += canvas.h_ / 2;
-    y1 += canvas.h_ / 2;
-
     for (float i = -size; i < size; i += 2 * size / iterations) {
       for (float j = -size; j < size; j += 2 * size / iterations) {
         putLine(canvas, x0 + i, y0 + j, x1 + i, y1 + j, r, g, b);
@@ -117,20 +136,42 @@ struct Ngon : public Canvas::Entity {
   using Pt = typename Canvas::Pt;
   using CTR = typename Canvas::CTR;
 
-  Ngon(Pt origin, float size, int n, Col col) : origin_(origin), size_(size), n_(n), col_(col) {
+  void recalcLines() {
+    lines_.clear();
     Pt cur{0, size_}, last{0, size_};
     auto shift = std::polar<float>(1, 3.14159265358979323846 * 2 / n_);
     cur *= shift;
 
     for (int i = 0; i < n_; ++i) {
-      Line line(last + origin, cur + origin, col_);
+      Line line(last + origin_, cur + origin_, col_);
       lines_.push_back(line);
       cur *= shift;
       last *= shift;
     }
   }
+
+  Ngon(Pt origin, float size, int n, Col col) : origin_(origin), size_(size), n_(n), col_(col) {
+    recalcLines();
+  }
+
+  virtual void applyFrm(const frm& f) override {
+    origin_.real(f["pos_x"]);
+    origin_.imag(f["pos_y"]);
+
+    recalcLines();
+  }
+
   virtual void render(CTR canvas) override {
     for (auto& i : lines_) i.render(canvas);
+  }
+
+  virtual std::string renderJSON(CTR canvas) override {
+    std::string res = "";
+    for (auto& i : lines_) {
+      if (res != "") res += ",";
+      res += i.renderJSON(canvas);
+    }
+    return res;
   }
   std::vector<Line> lines_;
   Pt origin_;
@@ -176,10 +217,11 @@ struct Img : public Canvas::Entity {
   BITMAPINFOHEADER* info_header;
 
   Pt origin_;
-  
-  Img(Pt origin, unsigned char ptr[], int length) : origin_(origin) {
-    buffer = ptr;
+  std::string img_id_;
 
+  Img(Pt origin, std::string img_id, unsigned char* ptr = 0, int length = 0) : origin_(origin) {
+    buffer = ptr;
+    img_id_ = img_id;
     file_header = (BITMAPFILEHEADER*)(buffer);
     info_header = (BITMAPINFOHEADER*)(buffer + sizeof(BITMAPFILEHEADER));
   }
@@ -237,11 +279,6 @@ struct Img : public Canvas::Entity {
         y += offset;    
         if (y > h or x > w) continue;
 
-        // unsigned char b = buffer[file_header->bfSize - count];
-        // ++count;
-        // unsigned char g = buffer[file_header->bfSize - count];
-        // ++count;
-        // unsigned char r = buffer[file_header->bfSize - count];
         uint32_t col = *(uint32_t*)(buffer + (file_header->bfSize - count));
         if ((col & 0xff) < 0xf and (col & 0xff00) < 0x0f00 and
             (col & 0xff0000) < 0x0f0000)
@@ -249,12 +286,29 @@ struct Img : public Canvas::Entity {
         col <<= 8;
         col |= 0xff;
         col = Col::make(col);
-        // if (rand() % 1000 == 0) std::cout << "|" << std::hex << col << "|" << std::endl;
         *(uint32_t*)canvas.pixel(i, j) = col;
-        // canvas.setXYRGBA(i, j, r, g, b, 255);
       }
       x += offset;
     }
+
+    
+  }
+  virtual std::string renderJSON(CTR canvas) override {
+    int w = info_header->biWidth;
+    int h = info_header->biHeight;
+
+    Pt a(0, 0), b(w, h); 
+    a += origin_;
+    b += origin_;
+    
+    a = canvas.transform(a);
+    b = canvas.transform(b);
+
+    return string_format(
+        R"({"type":"img","img_id":"%s","x":%f,"y":%f,"w":%f,"h":%f})",
+        img_id_.c_str(),
+        a.real(), a.imag(), b.real() - a.real(), b.imag() - a.imag()
+    );
   }
 };
 
@@ -265,4 +319,5 @@ struct Img : public Canvas::Entity {
 //     col_.g, col_.b);
 //   }
 // }
+
 }

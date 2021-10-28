@@ -15,6 +15,8 @@
 #include <fstream>
 #include <cmath>
 #include <memory>
+#include <stdlib.h>
+#include <string.h>
 #include "em_header.hpp"
 #include "io.hpp"
 #include "animations.hpp"
@@ -56,7 +58,19 @@ struct Col {
            (col & 0x00ff0000) >> 8  |
            (col & 0x0000ff00) << 8  |
            (col & 0x000000ff) << 24;
+  }
 
+  template <typename I>
+  static std::string n2hexstr(I w, size_t hex_len = sizeof(I) << 1) {
+    static const char* digits = "0123456789ABCDEF";
+    std::string rc(hex_len, '0');
+    for (size_t i = 0, j = (hex_len - 1) * 4; i < hex_len; ++i, j -= 4)
+      rc[i] = digits[(w >> j) & 0x0f];
+    return rc;
+  }
+
+  std::string toHexStr() {
+    return "#" + n2hexstr(r) + n2hexstr(g) + n2hexstr(b) + n2hexstr(a);
   }
 };
 
@@ -66,22 +80,51 @@ struct Canvas {
   typedef Canvas& CTR;
 
   struct Entity {
-    virtual void applyFrm(const frm& f) {};
+    virtual void applyFrm(const frm& f) = 0;
     virtual void render(CTR canvas) = 0;
+    virtual std::string renderJSON(CTR canvas) = 0;
     virtual ~Entity() {};
   };
 
-  Canvas(size_t w, size_t h) {
+  Canvas(std::string id, size_t w, size_t h) {
     /* 4k max  */
+    id_ = id;
     data_ = new u8[33'177'600 + 1024];
     data_ += 1024;
     reset(w, h);
   }
 
-  void reset(int w, int h) {
+  void reset(int w, int h, bool do_fill = false) {
     h_ = h;
     w_ = w;
-    fill(Dracula::gray);
+    if (do_fill) fill(Dracula::gray);
+  }
+
+  Pt transform(Pt p) {
+    p.real(p.real() - x_);
+    p.imag(p.imag() - y_);
+
+    p.real(p.real() * zoom_);
+    p.imag(p.imag() * zoom_);
+
+    p.real(p.real() + w_ / 2);
+    p.imag(p.imag() + h_ / 2);
+
+    return p;
+  }
+
+  Pt transformBack(Pt p) {
+    p.real(p.real() - w_ / 2);
+    p.imag(p.imag() - h_ / 2);
+
+
+    p.real(p.real() / zoom_);
+    p.imag(p.imag() / zoom_);
+
+    p.real(p.real() + x_);
+    p.imag(p.imag() + y_);
+
+    return p;
   }
 
   void invert() {
@@ -140,19 +183,53 @@ struct Canvas {
 
   void pushEntity(int z, std::string id, Entity* entity) {
     entities_[z] = std::shared_ptr<Entity>(entity);
+    entities_str_[id] = z;
   }
 
   void pushEntity(std::string id, Entity* entity) {
     pushEntity(entities_.size() ? entities_.rbegin()->first + 1 : 0, id, entity);
   }
 
+  void playAnim(std::string id, anim animation) {
+    animations_.insert({id, animation});
+  }
+
   uint8_t* data() { return data_; }
 
+  void updateIO() {
+    auto zoom = ioGetDouble(id_ + "_zoom");
+    if (zoom == 0) zoom = 1;
+
+    setZoom(zoom);
+    setX(ioGetDouble(id_ + "_x"));
+    setY(ioGetDouble(id_ + "_y"));
+  }
   uint8_t* render() {
-    for (auto [z, entity] : entities_) {
+    updateIO();
+
+    for (auto [id, z] : entities_str_) {
+      auto& entity = entities_[z]; 
+      if (animations_.count(id)) {
+        entity->applyFrm(animations_.at(id).get());
+      }
       entity->render(*this);
     }
     return data();
+  }
+  std::string renderJSON() {
+    updateIO();
+
+    std::string res = R"({"data": [)";
+    for (auto [id, z] : entities_str_) {
+      auto& entity = entities_[z];
+      if (animations_.count(id)) {
+        entity->applyFrm(animations_.at(id).get());
+      }
+      if (res != R"({"data": [)") res += ",";
+      res += entity->renderJSON(*this);
+    }
+    res += "]}";
+    return res;
   }
 
   float getX() { return x_; }
@@ -183,11 +260,42 @@ struct Canvas {
     addPixel(x, y, r * brightness, g * brightness, b * brightness, 255);
   }
 
-  size_t w_, h_;
+  std::string id_;
+  size_t w_ = 500, h_ = 500;
   float x_ = 0, y_ = 0, zoom_ = 10;
   uint8_t* data_ = nullptr;
   std::mt19937 rng;
   std::map<int, std::shared_ptr<Entity>> entities_;
+  std::map<std::string, anim> animations_;
+  std::map<std::string, int> entities_str_;
+
+  static std::map<std::string, std::shared_ptr<Canvas>> canvases;
+
+  static Canvas& getCanvas(std::string name) {
+    return *canvases.at(name);
+  }
+
+  static Canvas& regiesterCanvas(std::string name) {
+    canvases.insert({name, std::shared_ptr<Canvas>(new Canvas(name, 500, 500))});
+    return getCanvas(name);
+  }
 };
 
+extern "C" {
+EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(char* ptr, int w, int h) {
+  std::string id(ptr);
+  auto& canvas = Canvas::getCanvas(id);
+  canvas.reset(w, h, true);
+  return canvas.render();
+}
+EMSCRIPTEN_KEEPALIVE char* getCanvasJSON(char* ptr, int w, int h) {
+  std::string id(ptr);
+  auto& canvas = Canvas::getCanvas(id);
+  canvas.reset(w, h, false);
+  auto str = canvas.renderJSON();
+  char* cstr = new char[str.length() + 1];
+  strcpy(cstr, str.c_str());
+  return cstr;
+}
+}
 }  // namespace wwasm

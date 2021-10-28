@@ -1,6 +1,6 @@
 import React from "react";
 import "./canvas.css";
-import { ioGetDouble, ioSetDouble, drawCanvas } from "./wwasm.js";
+import { wwasmUpdate, is_init, ioGetDouble, ioSetDouble, drawCanvas, drawCanvasJSON } from "./wwasm.js";
 
 export default function WCanvas(props) {
   let canvas_id = props.canvas_id;
@@ -46,14 +46,23 @@ export default function WCanvas(props) {
   }
 
   setInterval(() => {
+    if (!is_init) 
+      return;
+
     let canvas_div = document.getElementById(canvas_id + "_div");
     let canvas = document.getElementById(canvas_id);
     let w = canvas_div.parentElement.clientWidth;
     let h = canvas_div.parentElement.clientHeight;
     canvas.width = w;
     canvas.height = h;
-    drawCanvas(canvas_id, w, h);
-  }, 13);
+
+    wwasmUpdate(16);
+    if (props.render && props.render == "cpp") {
+      drawCanvas(canvas_id, w, h);
+    } else {
+      drawCanvasJSON(canvas_id, w, h);
+    }
+  }, 16);
 
   return (
     <div id={canvas_id + "_div"}>

@@ -6,8 +6,11 @@ export let ioSetInt = () => null;
 export let ioGetDouble = () => null;
 export let ioSetDouble = () => null;
 
-export let getCanvasData = () => 0;
+export let getCanvasData = () => null;
+export let getCanvasJSON = () => null;
 export let readUint8Array = () => null;
+export let wwasmUpdate = () => null;
+export let is_init = false;
 
 WWasmModule().then((Module) => {
   ioSetInt = Module.cwrap("ioSetInt", "number", ["string", "number"]);
@@ -21,9 +24,19 @@ WWasmModule().then((Module) => {
     "number",
     "number",
   ]);
+  getCanvasJSON = Module.cwrap("getCanvasJSON", "string", [
+    "string",
+    "number",
+    "number",
+  ]);
+  wwasmUpdate = Module.cwrap("wwasmUpdate", "number", ["number"]);
   readUint8Array = (ptr, size) => {
     return new Uint8Array(Module.HEAPU8.buffer, ptr, size);
   };
+  setInterval(() => {
+    wwasmUpdate(16);
+  }, 16);
+  is_init = true;
 });
 
 function writeImageDataToCanvas(canvas, data, width, height) {
@@ -47,3 +60,26 @@ export function drawCanvas(canvas_id, w, h) {
     h
   );
 }
+
+export function drawCanvasJSON(canvas_id, w, h) {
+  let data = JSON.parse(getCanvasJSON(canvas_id, w, h));
+  if (data === null) return;
+  let canvas = document.getElementById(canvas_id);
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#44475aff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  data.data.forEach(i => {
+    if (i.type === "line") {
+      ctx.beginPath();
+      ctx.moveTo(i.ax, h - i.ay);
+      ctx.lineTo(i.bx, h - i.by);
+      ctx.strokeStyle = i.col;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (i.type === "img") {
+      ctx.drawImage(document.getElementById(i.img_id), i.x, h - i.y - i.h, i.w, i.h);
+    }
+  });
+}
+

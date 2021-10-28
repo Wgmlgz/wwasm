@@ -15,8 +15,10 @@ struct prp {
   operator float() const{ return f_; }
 };
 
+namespace literals {
 prp operator"" _cnt(long double val) { return prp(float(val)); }
 prp operator"" _cnt(unsigned long long val) { return prp(float(val)); }
+}  // namespace literals
 
 struct frm {
   std::map<std::string, prp> props;
@@ -57,25 +59,29 @@ frm interp(const frm& lhs, const frm& rhs, float t) {
 
 
 struct anim {
-  std::list<std::pair<float, frm>> frames_;
+  std::vector<std::pair<float, frm>> frames_;
+  int frame_id_ = 1;
   bool loop = true;   
   std::chrono::time_point<std::chrono::system_clock> start_, last_;
 
-  std::list<std::pair<float, frm>>::iterator cur_, next_;
-  anim(const std::list<std::pair<float, frm>>& frames) : frames_(frames) {
+  std::vector<std::pair<float, frm>>::iterator cur_, next_;
+  anim(const std::vector<std::pair<float, frm>>& frames) : frames_(frames) {
     if (frames.size() < 2) throw std::runtime_error("need 2 or more frames");
     reset();
   }
 
   void reset() {
+    frame_id_ = 1;
     last_ = start_ = std::chrono::system_clock::now();
     cur_ = frames_.begin();
     next_ = ++frames_.begin();
   }
   void nextFrame() {
-    if (++next_ == frames_.end()) {
+    ++frame_id_;
+    if (frame_id_ >= frames_.size()) {
       reset();
     } else {
+      ++next_;
       ++cur_;
     }
   }
@@ -83,7 +89,8 @@ struct anim {
     auto now = std::chrono::system_clock::now();
     std::chrono::duration<float> dt = now - last_;
     std::chrono::duration<float> ts = now - start_;
-    if (ts.count() >= next_->first) {
+
+    if (ts.count() > next_->first) {
       nextFrame();
       last_ = now;
     }
@@ -91,10 +98,8 @@ struct anim {
     dt = now - last_;
     ts = now - last_;
     auto t = dt.count() / (next_->first - cur_->first);
-    // std::cout << cur_->first << " " << next_->first << std::endl;
     t = std::min<float>(std::max<float>(0, t), 1);
     return interp(cur_->second, next_->second, t);
   }
-
 };
 }

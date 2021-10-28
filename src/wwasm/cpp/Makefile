@@ -1,5 +1,5 @@
 build:
-	em++ --no-entry ./wwasm.cpp -o ../react/wwasm.mjs  \
+	em++ --no-entry ./demo.cpp -o ../react/wwasm.mjs  \
 	  -s ENVIRONMENT='web'  \
 	  -s SINGLE_FILE=1  \
 	  -s EXPORT_NAME='WWasmModule'  \
