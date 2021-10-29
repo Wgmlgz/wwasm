@@ -1,7 +1,7 @@
 import React from "react";
-import WCanvas from "./wwasm/react/canvas.jsx";
-import frog from "./wwasm/cpp/images/frog.bmp";
-import smol_frog from "./wwasm/cpp/images/smol_frog.jpg";
+import WCanvas from "./wwasm/react/wwasm/canvas.jsx";
+import frog from "./wwasm/cpp/wwasm/images/frog.bmp";
+import smol_frog from "./wwasm/cpp/wwasm/images/smol_frog.jpg";
 
 class App extends React.Component {
   render() {
