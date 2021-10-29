@@ -6,6 +6,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <iostream>
 
 namespace wwasm {
 struct prp {
@@ -30,6 +31,12 @@ struct frm {
   prp& operator[](const std::string& str) { return props.at(str); }
 };
 
+std::ostream& operator<<(std::ostream& os, const frm& fr) {
+  for (auto& [id, p] : fr.props) {
+    os << id << ": "<< p.f_ << std::endl;
+  }
+  return os;
+}
 frm operator|(const frm& lhs, const frm& rhs) {
   auto res = lhs;
   for (const auto& [id, prop] : rhs.props) {
@@ -63,43 +70,53 @@ struct anim {
   int frame_id_ = 1;
   bool loop = true;   
   std::chrono::time_point<std::chrono::system_clock> start_, last_;
+  std::function<void(anim&)> on_fin_;
 
-  std::vector<std::pair<float, frm>>::iterator cur_, next_;
-  anim(const std::vector<std::pair<float, frm>>& frames) : frames_(frames) {
+  int cur_, next_;
+  anim(const std::vector<std::pair<float, frm>>& frames,
+      std::function<void(anim&)> on_fin = [](anim& a) {a.replay();})
+      : frames_(frames), on_fin_(on_fin) {
     if (frames.size() < 2) throw std::runtime_error("need 2 or more frames");
-    reset();
+    replay();
   }
 
-  void reset() {
+  void replay() {
     frame_id_ = 1;
     last_ = start_ = std::chrono::system_clock::now();
-    cur_ = frames_.begin();
-    next_ = ++frames_.begin();
+    cur_ = 0;
+    next_ = 1;
   }
-  void nextFrame() {
+
+  bool nextFrame() {
     ++frame_id_;
     if (frame_id_ >= frames_.size()) {
-      reset();
+      return true;
     } else {
       ++next_;
       ++cur_;
     }
+
+    return false;
   }
+
   frm get() {
     auto now = std::chrono::system_clock::now();
     std::chrono::duration<float> dt = now - last_;
     std::chrono::duration<float> ts = now - start_;
 
-    if (ts.count() > next_->first) {
-      nextFrame();
+    bool call_fin = false;
+    if (ts.count() > frames_[next_].first) {
+      call_fin = nextFrame();
       last_ = now;
     }
 
     dt = now - last_;
     ts = now - last_;
-    auto t = dt.count() / (next_->first - cur_->first);
+    auto t = dt.count() / (frames_[next_].first - frames_[cur_].first);
     t = std::min<float>(std::max<float>(0, t), 1);
-    return interp(cur_->second, next_->second, t);
+    auto res = interp(frames_[cur_].second, frames_[next_].second, t);
+    if (call_fin) on_fin_(*this);
+    return res;
   }
 };
 }

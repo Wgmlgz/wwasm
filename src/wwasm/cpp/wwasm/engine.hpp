@@ -11,12 +11,16 @@ std::function<void()> on_init;
 bool is_init = false;
 extern "C" {
   EMSCRIPTEN_KEEPALIVE int wwasmUpdate(int dt) {
-    if (!is_init) {
-      is_init = true;
-      on_init();
-    }
+    try {
+      if (!is_init) {
+        is_init = true;
+        on_init();
+      }
 
-    on_update();
+      on_update();
+    } catch (std::runtime_error err) {
+      std::cout << err.what() << std::endl;
+    }
     return 0;
   }
 }

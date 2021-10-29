@@ -17,6 +17,7 @@
 #include <memory>
 #include <stdlib.h>
 #include <string.h>
+#include <queue>
 #include "em_header.hpp"
 #include "io.hpp"
 #include "animations.hpp"
@@ -183,6 +184,21 @@ struct Canvas {
   void pushEntity(int z, std::string id, Entity* entity) {
     entities_[z] = std::shared_ptr<Entity>(entity);
     entities_str_[id] = z;
+    std::cout << z << std::endl;
+  }
+
+  void popEntity(const std::string& id) {
+    remove_queue.push(id);
+  }
+
+  void removeEntities() {
+    while(remove_queue.size()) {
+      auto id = remove_queue.front();
+      remove_queue.pop();
+      entities_.erase(entities_str_[id]);
+      entities_str_.erase(id);
+      animations_.erase(id);
+    }
   }
 
   void pushEntity(std::string id, Entity* entity) {
@@ -213,6 +229,8 @@ struct Canvas {
       }
       entity->render(*this);
     }
+
+    removeEntities();
     return data();
   }
   std::string renderJSON() {
@@ -228,6 +246,8 @@ struct Canvas {
       res += entity->renderJSON(*this);
     }
     res += "]}";
+
+    removeEntities();
     return res;
   }
 
@@ -267,6 +287,7 @@ struct Canvas {
   std::map<int, std::shared_ptr<Entity>> entities_;
   std::map<std::string, anim> animations_;
   std::map<std::string, int> entities_str_;
+  std::queue<std::string> remove_queue;
 
   static std::map<std::string, std::shared_ptr<Canvas>> canvases;
 
@@ -285,7 +306,8 @@ EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(char* ptr, int w, int h) {
   std::string id(ptr);
   auto& canvas = Canvas::getCanvas(id);
   canvas.reset(w, h, true);
-  return canvas.render();
+  auto res = canvas.render();
+  return res;
 }
 EMSCRIPTEN_KEEPALIVE char* getCanvasJSON(char* ptr, int w, int h) {
   std::string id(ptr);
