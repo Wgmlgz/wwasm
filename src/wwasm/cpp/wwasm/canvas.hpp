@@ -30,6 +30,11 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
+
 namespace Dracula {
   auto red = 0xff5555ff;
   auto black = 0x282a36ff;
@@ -87,12 +92,12 @@ struct Canvas {
   };
 
   Canvas(std::string id, size_t w, size_t h) {
-    /* 4k max  */
     id_ = id;
-    data_ = new u8[33'177'600 + 1024];
+    data_ = new u8[w * h * 10 + 1024];
     data_ += 1024;
     reset(w, h);
   }
+  Canvas() {}
 
   void reset(int w, int h, bool do_fill = false) {
     h_ = h;
@@ -184,7 +189,6 @@ struct Canvas {
   void pushEntity(int z, std::string id, Entity* entity) {
     entities_[z] = std::shared_ptr<Entity>(entity);
     entities_str_[id] = z;
-    std::cout << z << std::endl;
   }
 
   void popEntity(const std::string& id) {
@@ -195,6 +199,8 @@ struct Canvas {
     while(remove_queue.size()) {
       auto id = remove_queue.front();
       remove_queue.pop();
+      if (!entities_str_.contains(id)) continue;
+      
       entities_.erase(entities_str_[id]);
       entities_str_.erase(id);
       animations_.erase(id);
@@ -206,6 +212,7 @@ struct Canvas {
   }
 
   void playAnim(std::string id, anim animation) {
+    animations_.erase(id);
     animations_.insert({id, animation});
   }
 
@@ -219,6 +226,14 @@ struct Canvas {
     setX(ioGetDouble(id_ + "_x"));
     setY(ioGetDouble(id_ + "_y"));
   }
+
+  void clear() {
+    entities_.clear();
+    animations_.clear();
+    entities_str_.clear();
+    while(remove_queue.size()) remove_queue.pop();
+  }
+
   uint8_t* render() {
     updateIO();
 
@@ -233,6 +248,8 @@ struct Canvas {
     removeEntities();
     return data();
   }
+
+
   std::string renderJSON() {
     updateIO();
 
@@ -289,17 +306,18 @@ struct Canvas {
   std::map<std::string, int> entities_str_;
   std::queue<std::string> remove_queue;
 
-  static std::map<std::string, std::shared_ptr<Canvas>> canvases;
+  static std::map<std::string, Canvas> canvases;
 
   static Canvas& getCanvas(std::string name) {
-    return *canvases.at(name);
+    return canvases.at(name);
   }
 
   static Canvas& regiesterCanvas(std::string name) {
-    canvases.insert({name, std::shared_ptr<Canvas>(new Canvas(name, 500, 500))});
+    canvases.emplace(name, Canvas(name, 500, 500));
     return getCanvas(name);
   }
 };
+std::map<std::string, Canvas> Canvas::canvases = {{"default", Canvas("default", 10, 10)}};
 
 extern "C" {
 EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(char* ptr, int w, int h) {
@@ -309,14 +327,16 @@ EMSCRIPTEN_KEEPALIVE uint8_t* getCanvasData(char* ptr, int w, int h) {
   auto res = canvas.render();
   return res;
 }
-EMSCRIPTEN_KEEPALIVE char* getCanvasJSON(char* ptr, int w, int h) {
+
+EMSCRIPTEN_KEEPALIVE const char* getCanvasJSON(char* ptr, int w, int h) {
   std::string id(ptr);
   auto& canvas = Canvas::getCanvas(id);
   canvas.reset(w, h, false);
   auto str = canvas.renderJSON();
-  char* cstr = new char[str.length() + 1];
-  strcpy(cstr, str.c_str());
-  return cstr;
+  
+  static std::string buff;
+  buff = str;
+  return buff.c_str();
 }
 }
 }  // namespace wwasm

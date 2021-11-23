@@ -1,15 +1,20 @@
 import React, { Component, useEffect, useState } from "react";
-import WWasmModule from "../build.mjs";
+import WWasmModule from "C:/Code/School/Warehouse/Frontend/warehouse/src/build.mjs";
 
 export let ioGetInt = () => null;
 export let ioSetInt = () => null;
 export let ioGetDouble = () => null;
 export let ioSetDouble = () => null;
+export let ioGetStr = () => null;
+export let ioSetStr = () => null;
+
 
 export let getCanvasData = () => null;
 export let getCanvasJSON = () => null;
 export let readUint8Array = () => null;
 export let wwasmUpdate = () => null;
+export let wwasmInvoke = () => null;
+
 export let is_init = false;
 
 WWasmModule().then((Module) => {
@@ -18,6 +23,10 @@ WWasmModule().then((Module) => {
 
   ioSetDouble = Module.cwrap("ioSetDouble", "number", ["string", "number"]);
   ioGetDouble = Module.cwrap("ioGetDouble", "number", ["string"]);
+
+  ioSetStr = Module.cwrap("ioSetStr", "string", ["string", "string"]);
+  ioGetStr = Module.cwrap("ioGetStr", "string", ["string"]);
+  wwasmInvoke = Module.cwrap("wwasmInvoke", "number", ["string"]);
 
   getCanvasData = Module.cwrap("getCanvasData", "number", [
     "string",
@@ -62,12 +71,13 @@ export function drawCanvas(canvas_id, w, h) {
 }
 
 export function drawCanvasJSON(canvas_id, w, h) {
-  let data = JSON.parse(getCanvasJSON(canvas_id, w, h));
+  let s = getCanvasJSON(canvas_id, w, h);
+  let data = JSON.parse(s);
   if (data === null) return;
   let canvas = document.getElementById(canvas_id);
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "#44475aff";
+  ctx.fillStyle = "#282a3600";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   data.data.forEach(i => {
     if (i.type === "line") {
